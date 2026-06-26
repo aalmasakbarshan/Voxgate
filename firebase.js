@@ -3,13 +3,13 @@ import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.0/firebase
 
 const firebaseConfig = {
   // PASTE YOUR CONFIG FROM STEP 16 HERE
-  apiKey: "PASTE_HERE",
-  authDomain: "PASTE_HERE",
-  databaseURL: "PASTE_HERE",
-  projectId: "PASTE_HERE",
-  storageBucket: "PASTE_HERE",
-  messagingSenderId: "PASTE_HERE",
-  appId: "PASTE_HERE"
+  apiKey: "AIzaSyCvBOcEcUjNTUpca4AAUBl0bsez9yZ49qA",
+  authDomain: "voxgate-60aa1.firebaseapp.com",
+  databaseURL: "https://voxgate-60aa1-default-rtdb.firebaseio.com",
+  projectId: "voxgate-60aa1",
+  storageBucket: "voxgate-60aa1.firebasestorage.app",
+  messagingSenderId: "672529198711",
+  appId: "1:672529198711:web:cb2bc76fdea26b738ae072"
 };
 
 const app = initializeApp(firebaseConfig);
