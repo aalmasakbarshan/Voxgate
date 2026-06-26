@@ -219,10 +219,10 @@ window.addEventListener('devicemotion', (e) => {
 
 /* ── TOUCH WAKE ── */
 document.getElementById('sleep-screen')
-  .addEventListener('touchstart', wakeUp);
-document.getElementById('sleep-screen')
-  .addEventListener('click', wakeUp);
+  .addEventListener('touchstart', () => window.wakeUp());
 
+document.getElementById('sleep-screen')
+  .addEventListener('click', () => window.wakeUp());
 /* ── WAKE UP FUNCTION ── */
 window.wakeUp = function() {
   if (isAwake) return;
