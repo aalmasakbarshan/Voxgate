@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VoxGate – Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; background: #f5f5f0;
+  padding: 20px; min-height: 100vh; }
+h1 { font-size: 20px; font-weight: 600; margin-bottom: 2px; }
+.sub { font-size: 13px; color: #888; margin-bottom: 18px; }
+.status-row { display: flex; align-items: center;
+  gap: 8px; margin-bottom: 18px; }
+.dot { width: 8px; height: 8px; border-radius: 50%;
+  background: #1D9E75; }
+.dot.busy { background: #E24B4A; }
+.status-txt { font-size: 13px; color: #555; }
+.toggle { padding: 5px 14px; border: 0.5px solid #ccc;
+  border-radius: 20px; background: #fff;
+  font-size: 12px; cursor: pointer; margin-left: auto; }
+.stats { display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 10px; margin-bottom: 18px; }
+.stat { background: #fff; border-radius: 12px;
+  padding: 14px; border: 0.5px solid #e0e0d8; }
+.stat-val { font-size: 26px; font-weight: 600; }
+.stat-lbl { font-size: 11px; color: #aaa; }
+.card { background: #fff; border-radius: 16px;
+  padding: 18px; border: 0.5px solid #e0e0d8;
+  margin-bottom: 14px; }
+.card-title { font-size: 12px; color: #aaa;
+  margin-bottom: 12px; font-weight: 500; }
+.visitor-name { font-size: 18px; font-weight: 600;
+  margin-bottom: 4px; }
+.visitor-meta { font-size: 13px; color: #888;
+  margin-bottom: 10px; }
+.purpose { background: #f5f5f0; border-radius: 10px;
+  padding: 10px 14px; font-size: 14px;
+  color: #444; margin-bottom: 14px; }
+.actions { display: flex; gap: 10px; }
+.btn-done { flex:1; padding:12px; background:#1D9E75;
+  border:none; border-radius:10px; color:#fff;
+  font-size:14px; font-weight:500; cursor:pointer; }
+.btn-wait { flex:1; padding:12px; background:#fff;
+  border:0.5px solid #ccc; border-radius:10px;
+  color:#555; font-size:14px; cursor:pointer; }
+.btn-busy { flex:1; padding:12px; background:#FCEBEB;
+  border:0.5px solid #E24B4A; border-radius:10px;
+  color:#A32D2D; font-size:14px; cursor:pointer; }
+.q-item { display:flex; align-items:center; gap:10px;
+  padding:10px 0; border-bottom:0.5px solid #eee; }
+.q-num { font-size:12px; color:#ccc; min-width:18px; }
+.q-name { flex:1; font-size:14px; }
+.q-tag { font-size:11px; background:#E6F1FB;
+  color:#185FA5; border-radius:6px; padding:3px 10px; }
+.empty { font-size:13px; color:#bbb; padding:12px 0; }
+.notif { background:#E1F5EE; border-radius:10px;
+  padding:10px 14px; font-size:13px; color:#085041;
+  margin-bottom:14px; display:none; }
+</style>
+</head>
+<body>
+<h1>VoxGate Dashboard</h1>
+<p class="sub" id="cabin-sub">Cabin 001 · Real-time visitor management</p>
+
+<div class="status-row">
+  <div class="dot" id="status-dot"></div>
+  <span class="status-txt" id="status-txt">Online – accepting visitors</span>
+  <button class="toggle" onclick="toggleBusy()">Toggle busy</button>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-val" id="s-total">0</div>
+    <div class="stat-lbl">Today's visitors</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="s-wait">0</div>
+    <div class="stat-lbl">Waiting now</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="s-avg">—</div>
+    <div class="stat-lbl">Est. wait</div>
+  </div>
+</div>
+
+<div id="notif-bar" class="notif"></div>
+
+<div class="card">
+  <div class="card-title">Now serving</div>
+  <div class="visitor-name" id="cv-name">No one yet</div>
+  <div class="visitor-meta" id="cv-meta">—</div>
+  <div class="purpose" id="cv-purpose">
+    Waiting for first visitor to scan outside…
+  </div>
+  <div class="actions">
+    <button class="btn-done" onclick="markDone()">✓ Done</button>
+    <button class="btn-wait" onclick="sendWait()">⏱ Wait 5 min</button>
+    <button class="btn-busy" onclick="sendBusy()">✗ Busy</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Queue</div>
+  <ul id="queue-list" style="list-style:none">
+    <li class="empty">No visitors waiting</li>
+  </ul>
+</div>
+
+<script type="module">
+import { db, CABIN_ID } from './firebase.js';
+import { listenToQueue, markDoneAndCallNext } from './queue.js';
+import { ref, update } from
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+let currentEntry = null;
+let isBusy = false;
+let totalToday = 0;
+
+listenToQueue(entries => {
+  const inside = entries.find(e => e.status === 'inside');
+  const waiting = entries.filter(e => e.status === 'waiting');
+
+  if (inside && (!currentEntry || currentEntry.id !== inside.id)) {
+    showNotif(`New visitor: ${inside.visitor_name} — ${inside.purpose}`);
+  }
+
+  currentEntry = inside || null;
+
+  if (inside) {
+    document.getElementById('cv-name').textContent = inside.visitor_name;
+    document.getElementById('cv-meta').textContent =
+      `ID: ${inside.visitor_id} · Position ${inside.position}`;
+    document.getElementById('cv-purpose').textContent =
+      inside.purpose || 'Not specified';
+  } else {
+    document.getElementById('cv-name').textContent = 'No one inside';
+    document.getElementById('cv-meta').textContent = '—';
+    document.getElementById('cv-purpose').textContent =
+      'Waiting for next visitor…';
+  }
+
+  document.getElementById('s-wait').textContent = waiting.length;
+  document.getElementById('s-avg').textContent =
+    waiting.length > 0 ? `~${waiting.length * 5}m` : '—';
+
+  const list = document.getElementById('queue-list');
+  if (waiting.length === 0) {
+    list.innerHTML = '<li class="empty">No visitors waiting</li>';
+  } else {
+    list.innerHTML = waiting.map((e, i) => `
+      <li class="q-item">
+        <span class="q-num">${i + 1}</span>
+        <span class="q-name">${e.visitor_name}</span>
+        <span class="q-tag">${e.purpose || 'Visit'}</span>
+      </li>`).join('');
+  }
+});
+
+function showNotif(msg) {
+  const bar = document.getElementById('notif-bar');
+  bar.textContent = '🔔 ' + msg;
+  bar.style.display = 'block';
+  setTimeout(() => { bar.style.display = 'none'; }, 5000);
+}
+
+window.markDone = async function() {
+  if (!currentEntry) return alert('No one is currently inside.');
+  totalToday++;
+  document.getElementById('s-total').textContent = totalToday;
+  await markDoneAndCallNext(currentEntry.id);
+}
+
+window.sendWait = function() {
+  alert('Wait message noted. Visitor will be informed.');
+}
+
+window.sendBusy = function() {
+  alert('Busy status set. Display will inform new visitors.');
+}
+
+window.toggleBusy = async function() {
+  isBusy = !isBusy;
+  await update(ref(db, `cabins/${CABIN_ID}`),
+    { status: isBusy ? 'busy' : 'active' });
+  document.getElementById('status-dot').className =
+    isBusy ? 'dot busy' : 'dot';
+  document.getElementById('status-txt').textContent =
+    isBusy ? 'Busy – not accepting visitors'
+           : 'Online – accepting visitors';
+}
+</script>
+</body>
+</html>

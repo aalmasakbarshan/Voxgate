@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoxGate</title>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f0f14; color: #fff; font-family: sans-serif;
+       min-height: 100vh; display: flex; flex-direction: column;
+       align-items: center; justify-content: center; padding: 20px; }
+
+/* Sleep screen */
+#sleep-screen { position: absolute; inset: 0; background: #0f0f14;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; z-index: 100; }
+.sleep-robot { font-size: 90px;
+  animation: breathe 4s ease-in-out infinite; }
+@keyframes breathe {
+  0%,100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+.sleep-text { color: #333; font-size: 14px; margin-top: 16px; }
+
+/* Wake animation */
+@keyframes yawn {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.waking { animation: yawn 0.8s ease-out forwards; }
+
+/* Main screen */
+#main-screen { display: none; flex-direction: column;
+  align-items: center; width: 100%; max-width: 420px; }
+.brand { font-size: 26px; font-weight: 700;
+  color: #a9a5f0; margin-bottom: 4px; }
+.sub { color: #555; font-size: 13px; margin-bottom: 24px; }
+
+/* Role buttons */
+.role-grid { display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; width: 100%; margin-bottom: 20px; }
+.role-btn { background: #1a1a2e; border: 0.5px solid #534AB7;
+  border-radius: 14px; padding: 20px 12px; text-align: center;
+  font-size: 15px; color: #a9a5f0; cursor: pointer;
+  transition: background .15s; }
+.role-btn:active { background: #252545; }
+.role-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+
+/* Scanner */
+#scanner-section { width: 100%; display: none; }
+#reader { border-radius: 16px; overflow: hidden; width: 100%; }
+.scan-hint { text-align: center; color: #666;
+  font-size: 13px; margin-top: 12px; margin-bottom: 16px; }
+.back-btn { background: transparent; border: 0.5px solid #333;
+  border-radius: 10px; color: #666; padding: 10px 24px;
+  font-size: 13px; cursor: pointer; width: 100%; }
+
+/* Result card */
+#result-card { display: none; background: #1a1a2e;
+  border-radius: 20px; padding: 24px; width: 100%;
+  border: 1px solid #534AB7; }
+.result-label { font-size: 11px; color: #555;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+.result-value { font-size: 16px; font-weight: 500;
+  margin-bottom: 14px; color: #fff; }
+.badge-ok { display: inline-block; background: #085041;
+  color: #9FE1CB; font-size: 12px; border-radius: 20px;
+  padding: 4px 14px; margin-bottom: 16px; }
+.badge-fail { display: inline-block; background: #712B13;
+  color: #F5C4B3; font-size: 12px; border-radius: 20px;
+  padding: 4px 14px; margin-bottom: 16px; }
+.pos-box { background: #0f0f14; border-radius: 12px;
+  padding: 16px; text-align: center; margin-bottom: 16px; }
+.pos-num { font-size: 48px; font-weight: 700; color: #a9a5f0; }
+.pos-lbl { font-size: 12px; color: #555; }
+.done-btn { width: 100%; padding: 14px; background: #534AB7;
+  border: none; border-radius: 12px; color: #fff;
+  font-size: 15px; font-weight: 500; cursor: pointer; }
+
+/* Mic bar */
+.mic-row { display: flex; align-items: center; gap: 10px;
+  background: #1a1a2e; border-radius: 12px; padding: 10px 14px;
+  border: 0.5px solid #2a2a4a; width: 100%; }
+.mic-circle { width: 32px; height: 32px; border-radius: 50%;
+  background: #534AB7; display: flex; align-items: center;
+  justify-content: center; font-size: 16px; flex-shrink: 0; }
+.mic-waves { display: flex; align-items: center;
+  gap: 3px; flex: 1; height: 24px; }
+.wave-bar { background: #534AB7; border-radius: 3px; width: 4px; }
+.wave-bar:nth-child(1){height:6px;animation:wv 1s ease-in-out infinite 0s}
+.wave-bar:nth-child(2){height:14px;animation:wv 1s ease-in-out infinite .1s}
+.wave-bar:nth-child(3){height:10px;animation:wv 1s ease-in-out infinite .2s}
+.wave-bar:nth-child(4){height:18px;animation:wv 1s ease-in-out infinite .3s}
+.wave-bar:nth-child(5){height:8px;animation:wv 1s ease-in-out infinite .15s}
+@keyframes wv {
+  0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.8)}
+}
+.mic-label { font-size: 12px; color: #555; }
+</style>
+</head>
+<body>
+
+<!-- SLEEP SCREEN -->
+<div id="sleep-screen">
+  <div class="sleep-robot" id="robot-emoji">🤖</div>
+  <p class="sleep-text">Walk closer or tap to begin</p>
+</div>
+
+<!-- MAIN SCREEN -->
+<div id="main-screen">
+  <p class="brand">VoxGate</p>
+  <p class="sub" id="cabin-name">AI Receptionist</p>
+
+  <!-- Role selection -->
+  <div id="role-section">
+    <div class="role-grid">
+      <div class="role-btn" onclick="showScanner('student')">
+        <span class="role-icon">🎓</span>Student
+      </div>
+      <div class="role-btn" onclick="showScanner('faculty')">
+        <span class="role-icon">👨‍🏫</span>Faculty
+      </div>
+      <div class="role-btn" onclick="showScanner('visitor')">
+        <span class="role-icon">🪪</span>Visitor
+      </div>
+      <div class="role-btn" onclick="showScanner('security')">
+        <span class="role-icon">🔒</span>Security
+      </div>
+    </div>
+    <div class="mic-row">
+      <div class="mic-circle">🎤</div>
+      <div class="mic-waves">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+      <span class="mic-label" id="mic-status">Listening...</span>
+    </div>
+  </div>
+
+  <!-- QR Scanner section -->
+  <div id="scanner-section">
+    <p class="scan-hint" id="scan-hint">Scan your ID card QR code</p>
+    <div id="reader"></div>
+    <button class="back-btn" style="margin-top:14px"
+      onclick="goBack()">← Back</button>
+  </div>
+
+  <!-- Result card -->
+  <div id="result-card">
+    <div class="result-label">Name</div>
+    <div class="result-value" id="r-name">—</div>
+    <div class="result-label">Department</div>
+    <div class="result-value" id="r-dept">—</div>
+    <div class="result-label">Role</div>
+    <div class="result-value" id="r-role">—</div>
+    <div class="result-label">Purpose</div>
+    <div class="result-value" id="r-purpose">—</div>
+    <span id="r-badge" class="badge-ok">✓ Verified</span>
+    <div class="pos-box">
+      <div class="pos-num" id="r-pos">—</div>
+      <div class="pos-lbl">Your position in queue</div>
+    </div>
+    <button class="done-btn" onclick="resetAll()">Done ✓</button>
+  </div>
+</div>
+
+<script type="module">
+import { db, CABIN_ID } from './firebase.js';
+import { addToQueue } from './queue.js';
+import { ref, get } from
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+let scanner = null;
+let currentRole = '';
+let isAwake = false;
+let sleepTimer = null;
+let faceCheckInterval = null;
+let videoEl = null;
+
+/* ── FACE DETECTION SETUP ── */
+async function startFaceDetection() {
+  try {
+    await faceapi.nets.tinyFaceDetector.loadFromUri(
+      'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights'
+    );
+    videoEl = document.createElement('video');
+    videoEl.autoplay = true;
+    videoEl.playsInline = true;
+    videoEl.style.display = 'none';
+    document.body.appendChild(videoEl);
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' }
+    });
+    videoEl.srcObject = stream;
+    faceCheckInterval = setInterval(async () => {
+      if (isAwake) return;
+      const det = await faceapi.detectSingleFace(
+        videoEl, new faceapi.TinyFaceDetectorOptions()
+      );
+      if (det) wakeUp();
+    }, 1500);
+  } catch (e) {
+    console.log('Face detection not available:', e);
+  }
+}
+
+/* ── ACCELEROMETER WAKE ── */
+window.addEventListener('devicemotion', (e) => {
+  if (isAwake) return;
+  const a = e.acceleration;
+  if (a && (Math.abs(a.x) > 2 || Math.abs(a.y) > 2)) wakeUp();
+});
+
+/* ── TOUCH WAKE ── */
+document.getElementById('sleep-screen')
+  .addEventListener('touchstart', wakeUp);
+document.getElementById('sleep-screen')
+  .addEventListener('click', wakeUp);
+
+/* ── WAKE UP FUNCTION ── */
+window.wakeUp = function() {
+  if (isAwake) return;
+  isAwake = true;
+  const robot = document.getElementById('robot-emoji');
+  robot.textContent = '🤖';
+  robot.classList.add('waking');
+  setTimeout(() => {
+    document.getElementById('sleep-screen').style.display = 'none';
+    const main = document.getElementById('main-screen');
+    main.style.display = 'flex';
+    speak('Hello! Welcome to VoxGate. Please select your role or speak your purpose.');
+    startVoiceListening();
+    resetSleepTimer();
+  }, 800);
+}
+
+/* ── VOICE INPUT ── */
+function startVoiceListening() {
+  if (!('webkitSpeechRecognition' in window)) return;
+  const recognition = new webkitSpeechRecognition();
+  recognition.continuous = false;
+  recognition.lang = 'en-IN';
+  recognition.onresult = (e) => {
+    const said = e.results[0][0].transcript.toLowerCase();
+    document.getElementById('mic-status').textContent = `"${said}"`;
+    if (said.includes('student')) showScanner('student');
+    else if (said.includes('faculty') || said.includes('teacher'))
+      showScanner('faculty');
+    else if (said.includes('visitor')) showScanner('visitor');
+    else if (said.includes('security')) showScanner('security');
+  };
+  recognition.onerror = () => {};
+  recognition.start();
+}
+
+/* ── SPEAK ── */
+function speak(text) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-IN';
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+
+/* ── SHOW SCANNER ── */
+window.showScanner = function(role) {
+  currentRole = role;
+  document.getElementById('role-section').style.display = 'none';
+  document.getElementById('scanner-section').style.display = 'block';
+  document.getElementById('scan-hint').textContent =
+    `${role.charAt(0).toUpperCase()+role.slice(1)} — scan your ID QR code`;
+  speak('Please scan your ID card QR code.');
+  if (scanner) { try { scanner.clear(); } catch(e){} }
+  scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: 250 });
+  scanner.render(onScanSuccess);
+  resetSleepTimer();
+}
+
+/* ── QR SCANNED ── */
+async function onScanSuccess(decodedText) {
+  try { scanner.clear(); } catch(e) {}
+  document.getElementById('scanner-section').style.display = 'none';
+  const snap = await get(ref(db, `visitors/${decodedText}`));
+  if (snap.exists()) {
+    const v = snap.val();
+    const purpose = currentRole === 'student' ? 'Student enquiry'
+      : currentRole === 'faculty' ? 'Faculty meeting'
+      : currentRole === 'security' ? 'Security check'
+      : 'External visit';
+    const pos = await addToQueue(
+      decodedText, v.name, v.phone || '', purpose
+    );
+    document.getElementById('r-name').textContent = v.name;
+    document.getElementById('r-dept').textContent = v.department;
+    document.getElementById('r-role').textContent = v.role || currentRole;
+    document.getElementById('r-purpose').textContent = purpose;
+    document.getElementById('r-pos').textContent = pos;
+    document.getElementById('r-badge').className = 'badge-ok';
+    document.getElementById('r-badge').textContent = '✓ Verified';
+    speak(`Welcome ${v.name}. You are number ${pos} in the queue.
+           Please wait. You will be notified when it is your turn.`);
+  } else {
+    document.getElementById('r-name').textContent = 'Unknown ID';
+    document.getElementById('r-dept').textContent = '—';
+    document.getElementById('r-role').textContent = '—';
+    document.getElementById('r-purpose').textContent = '—';
+    document.getElementById('r-pos').textContent = '!';
+    document.getElementById('r-badge').className = 'badge-fail';
+    document.getElementById('r-badge').textContent = '✗ Not Found';
+    speak('Sorry, this ID was not recognized. Please contact the office.');
+  }
+  document.getElementById('result-card').style.display = 'block';
+  setTimeout(resetAll, 12000);
+}
+
+/* ── BACK BUTTON ── */
+window.goBack = function() {
+  if (scanner) { try { scanner.clear(); } catch(e){} }
+  document.getElementById('scanner-section').style.display = 'none';
+  document.getElementById('role-section').style.display = 'block';
+}
+
+/* ── RESET ── */
+window.resetAll = function() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('scanner-section').style.display = 'none';
+  document.getElementById('role-section').style.display = 'block';
+  document.getElementById('mic-status').textContent = 'Listening...';
+  startVoiceListening();
+  resetSleepTimer();
+}
+
+/* ── AUTO SLEEP TIMER (2 minutes idle) ── */
+function resetSleepTimer() {
+  clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(goToSleep, 120000);
+}
+
+function goToSleep() {
+  isAwake = false;
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('sleep-screen').style.display = 'flex';
+  document.getElementById('robot-emoji').textContent = '😴';
+  speechSynthesis.cancel();
+}
+
+document.addEventListener('touchstart', resetSleepTimer);
+document.addEventListener('click', resetSleepTimer);
+
+/* ── START ── */
+startFaceDetection();
+</script>
+</body>
+</html>
